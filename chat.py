@@ -4,7 +4,9 @@ import openai
 import streamlit as st
 from audio_recorder_streamlit import audio_recorder
 from elevenlabs import generate
-from langchain.chains import RetrievalQA
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from streamlit_chat import message
@@ -23,7 +25,7 @@ TEMP_AUDIO_PATH = "temp_audio.wav"
 AUDIO_FORMAT = "audio/wav"
 
 # Initialize OpenAI client
-openai.api_key = os.environ.get('OPENAI_API_KEY')
+client = openai.OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
 eleven_api_key = os.environ.get('ELEVEN_API_KEY')
 PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY')
 
@@ -50,9 +52,11 @@ def load_embeddings_and_database():
 def transcribe_audio(audio_file_path):
     try:
         with open(audio_file_path, "rb") as audio_file:
-            response = openai.Audio.transcribe("whisper-1", audio_file)
-            # The response is a dictionary with a "text" key
-            return response["text"]
+            response = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=audio_file
+            )
+            return response.text
     except Exception as e:
         print(f"Error calling Whisper API: {str(e)}")
         return None
@@ -90,13 +94,28 @@ def get_user_input(transcription):
 # Search the database for a response based on the user's query
 def search_db(user_input, db):
     print(user_input)
-    retriever = db.as_retriever()
-    retriever.search_kwargs['distance_metric'] = 'cos'
-    retriever.search_kwargs['fetch_k'] = 100
-    retriever.search_kwargs['k'] = 4
-    model = ChatOpenAI(model_name='gpt-4o-mini')
-    qa = RetrievalQA.from_llm(model, retriever=retriever, return_source_documents=True)
-    return qa({'query': user_input})
+    retriever = db.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": 4}
+    )
+    
+    model = ChatOpenAI(model_name='gpt-3.5-turbo')
+    template = """Answer the question based on the following context:
+    {context}
+    
+    Question: {question}
+    """
+    prompt = ChatPromptTemplate.from_template(template)
+    
+    chain = (
+        {"context": retriever, "question": RunnablePassthrough()}
+        | prompt
+        | model
+        | StrOutputParser()
+    )
+    
+    response = chain.invoke(user_input)
+    return {"result": response, "source_documents": []}  # Maintaining the expected return format
 
 # Display conversation history using Streamlit messages
 def display_conversation(history):
