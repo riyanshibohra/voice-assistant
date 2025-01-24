@@ -34,7 +34,7 @@ def load_embeddings_and_database():
     embeddings = OpenAIEmbeddings()
     
     # Initialize Pinecone
-    pc = PineconeClient(api_key=PINECONE_API_KEY)
+    pc = PineconeClient()
     
     # Get the existing index
     db = Pinecone(
