@@ -4,13 +4,12 @@ import requests
 from dotenv import load_dotenv
 
 from bs4 import BeautifulSoup
-from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Pinecone
+from langchain_openai import OpenAIEmbeddings
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.document_loaders import TextLoader
-from pinecone import Pinecone, ServerlessSpec
-from langchain_pinecone import PineconeVectorStore
 
+from langchain_community.vectorstores import Pinecone
+from pinecone import Pinecone as PineconeClient, ServerlessSpec
 import re
 import warnings
 warnings.filterwarnings("ignore")
@@ -23,8 +22,8 @@ ELEVEN_API_KEY = os.getenv("ELEVEN_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 
 
-pc = Pinecone(api_key=PINECONE_API_KEY)
-# Initialize embeddings
+# Initialize Pinecone client
+pc = PineconeClient()
 embeddings = OpenAIEmbeddings(model="text-embedding-ada-002")
 
 # Create or get index
@@ -43,8 +42,8 @@ if index_name not in pc.list_indexes().names():
     )
 
 # Initialize the Pinecone vector store
-vectorstore = PineconeVectorStore.from_existing_index(
-    index_name=index_name,
+vectorstore = Pinecone(
+    index=pc.Index(index_name),
     embedding=embeddings,
     text_key="text"
 )
@@ -110,16 +109,12 @@ def split_docs(docs):
 
 def main():
     base_url = 'https://huggingface.co'
-    # Set the name of the file to which the scraped content will be saved
     filename='content.txt'
-    # Set the root directory where the content file will be saved
     root_dir ='./'
     relative_urls = get_documentation_urls()
 
     content = scrape_all_content(base_url,relative_urls,filename)
-
     docs = load_docs(root_dir,filename)
-
     texts = split_docs(docs)
 
     # Extract text content and create IDs
@@ -134,7 +129,6 @@ def main():
     )
 
     os.remove(filename)
-
     print("Content scraped, embedded, and stored in Pinecone successfully!")
 
 if __name__ == "__main__":
