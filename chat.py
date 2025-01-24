@@ -1,15 +1,19 @@
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+import openai
 import streamlit as st
 from audio_recorder_streamlit import audio_recorder
-from elevenlabs import generate, set_api_key
+from elevenlabs import generate
 from langchain.chains import RetrievalQA
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from streamlit_chat import message
-from pinecone import Pinecone as PineconeClient, ServerlessSpec
-from langchain_pinecone import PineconeVectorStore
+
+from langchain_community.vectorstores import Pinecone
+from pinecone import Pinecone as PineconeClient
+
+import warnings
+warnings.filterwarnings("ignore")
 
 # Load environment variables from the .env file
 load_dotenv()
@@ -19,7 +23,7 @@ TEMP_AUDIO_PATH = "temp_audio.wav"
 AUDIO_FORMAT = "audio/wav"
 
 # Initialize OpenAI client
-client = OpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+openai.api_key = os.environ.get('OPENAI_API_KEY')
 eleven_api_key = os.environ.get('ELEVEN_API_KEY')
 PINECONE_API_KEY = os.environ.get('PINECONE_API_KEY')
 
@@ -33,7 +37,7 @@ def load_embeddings_and_database():
     pc = PineconeClient(api_key=PINECONE_API_KEY)
     
     # Get the existing index
-    db = PineconeVectorStore(
+    db = Pinecone(
         index=pc.Index("voice-assistant"),
         embedding=embeddings,
         text_key="text"
@@ -46,10 +50,7 @@ def load_embeddings_and_database():
 def transcribe_audio(audio_file_path):
     try:
         with open(audio_file_path, "rb") as audio_file:
-            response = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=audio_file
-            )
+            response = openai.Audio.transcribe("whisper-1", audio_file)
         return response.text
     except Exception as e:
         print(f"Error calling Whisper API: {str(e)}")
@@ -102,11 +103,13 @@ def display_conversation(history):
         message(history["past"][i], is_user=True, key=str(i) + "_user")
         message(history["generated"][i], key=str(i))
         
-        # Simpler ElevenLabs generation
-        set_api_key(eleven_api_key)
-        voice = "Bella"
+        # Simple ElevenLabs generation
         text = history["generated"][i]
-        audio = generate(text=text, voice=voice)
+        audio = generate(
+            text=text,
+            voice="Bella",
+            api_key=eleven_api_key
+        )
         st.audio(audio, format='audio/mp3')
 
 # Main function to run the app
