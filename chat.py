@@ -135,7 +135,7 @@ def display_conversation(history):
 # Main function to run the app
 def main():
     # Initialize Streamlit app with a title
-    st.write("# JarvisBase 🧙")
+    st.write("# VoiceGPT 🎙️")
    
     # Load embeddings and the Pinecone database
     db = load_embeddings_and_database()
