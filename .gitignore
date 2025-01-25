@@ -23,3 +23,6 @@ __pycache__/
 .DS_Store
 
 audio_transcription.txt
+
+# Jupyter Notebook files
+init.ipynb
